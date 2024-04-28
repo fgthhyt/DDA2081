@@ -1,0 +1,301 @@
+---
+title: "DDA2081_report"
+author: "Jingyi Zong"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Paper report
+
+## download data
+
+Many of the databases in this article come from the GEO website. We use some packages in R to directly import the data into R, without the need to download it. Below is our code for downloading the GEO database (taking database 3 as an example).
+
+```{r download data}
+#BiocManager::install('GEOquery')
+#BiocManager::install('limma',force = TRUE)
+#BiocManager::install('umap',force = TRUE)
+#idprob = AnnoProbe::idmap("GPL570",type = 'soft') # Find the gene information corresponding to the probe ID
+#library(GEOquery)
+#library(limma)
+#library(umap)
+#gset <- getGEO("GSE39582", GSEMatrix =TRUE, getGPL=FALSE)
+#if (length(gset) > 1) idx <- grep("GPL570", attr(gset, "names")) else idx <- 1
+#gset <- gset[[idx]]
+#ex <- exprs(gset)
+pd <- pData(gset)
+```
+
+## How to obtain the four genes needed for research
+
+### DimensionReduction_PNAS.code
+
+Import the files:"Tcolon_new.csv","Ncolon_new.csv"
+
+```{r translate MATLAB code into R and explain the code}
+T <- as.data.frame((read.csv('Tcolon_new.csv')))# tumor samples
+N <- as.data.frame((read.csv('Ncolon_new.csv')))# normal samples
+```
+
+Identify the genes with the greatest differences between tumor people and normal people among 1991 genes.
+
+```{r translate MATLAB code into R and explain the code}
+m <- ncol(T) # the number of tumor samples
+n <- ncol(N) # the number of normal samples
+
+Cm <- Cv <- Cs <- numeric(nrow(T))
+
+# Calculate means, variances and coefficient of variation
+for (i in 1:nrow(T)) {
+  tm <- mean(as.numeric(T[i,]))
+  nm <- mean(as.numeric(N[i,]))
+  tv <- sd(as.numeric(T[i,]))
+  nv <- sd(as.numeric(N[i,]))
+  ts <- tv/tm
+  ns <- nv/nm
+  Cm[i] <- abs((tm-nm)/nm)
+  Cv[i] <- abs((tv-nv)/nv)
+  Cs[i] <- abs((ts-ns)/ns)
+}
+
+# Sort the metrics and retrieve indices
+Icm <- order(Cm)
+Icv <- order(Cv)
+Ics <- order(Cs)
+
+#Jm <- sort(Icm[(length(Icm)-18):length(Icm)]) # % 1%
+Jm <- sort(Icm[1:19]) 
+Jv <- sort(Icv[(length(Icv)-298):length(Icv)]) # % 85%
+Js <- Ics[(length(Ics)-99):length(Ics)] # % 5% 
+```
+
+
+```{r translate MATLAB code into R and explain the code}
+s <- numeric(0)
+
+thr <- 0.5
+for (i in 1:100) {
+  tt <- as.numeric(T[Js[i],])
+  tm <- mean(tt)
+  nm <- mean(as.numeric(N[Js[i],]))
+  nmax <- max(as.numeric(N[Js[i],]))
+  nmin <- min(as.numeric(N[Js[i],]))
+  if (tm > nm) {
+    Imax <- which(tt > nmax)
+    sen <- length(Imax)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Js[i]))
+    }
+  } else {
+    Imin <- which(tt < nmin)
+    sen <- length(Imin)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Js[i]))
+    }
+  }
+}
+
+# Repeat for other thresholds
+thr <- 0.7
+for (i in 1:19) {
+  tt <- as.numeric(T[Jm[i],])
+  tm <- mean(tt)
+  nm <- mean(as.numeric(N[Jm[i],]))
+  nmax <- max(as.numeric(N[Jm[i],]))
+  nmin <- min(as.numeric(N[Jm[i],]))
+  if (tm > nm) {
+    Imax <- which(tt > nmax)
+    sen <- length(Imax)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jm[i]))
+    }
+  } else {
+    Imin <- which(tt < nmin)
+    sen <- length(Imin)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jm[i]))
+    }
+  }
+}
+
+thr <- 0.8
+for (i in 1:299) {
+  tt <- as.numeric(T[Jv[i],])
+  tm <- mean(tt)
+  nm <- mean(as.numeric(N[Jv[i],]))
+  nmax <- max(as.numeric(N[Jv[i],]))
+  nmin <- min(as.numeric(N[Jv[i],]))
+  if (tm > nm) {
+    Imax <- which(tt > nmax)
+    sen <- length(Imax)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jv[i]))
+    }
+  } else {
+    Imin <- which(tt < nmin)
+    sen <- length(Imin)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jv[i]))
+    }
+  }
+}
+
+s0 <- sort(unique(s))
+s0
+```
+
+Repeat the above process. But let T = T^2 and N = N^2
+```{r}
+T <- T^2
+N <- N^2
+m <- ncol(T) 
+n <- ncol(N) 
+Cm <- Cv <- Cs <- numeric(nrow(T))
+for (i in 1:nrow(T)) {
+  tm <- mean(as.numeric(T[i,]))
+  nm <- mean(as.numeric(N[i,]))
+  tv <- sd(as.numeric(T[i,]))
+  nv <- sd(as.numeric(N[i,]))
+  ts <- tv/tm
+  ns <- nv/nm
+  Cm[i] <- abs((tm-nm)/nm)
+  Cv[i] <- abs((tv-nv)/nv)
+  Cs[i] <- abs((ts-ns)/ns)
+}
+Icm <- order(Cm)
+Icv <- order(Cv)
+Ics <- order(Cs)
+Jm <- sort(Icm[(length(Icm)-18):length(Icm)]) 
+Jv <- sort(Icv[(length(Icv)-298):length(Icv)]) 
+Js <- Ics[(length(Ics)-99):length(Ics)] 
+s <- numeric(0)
+thr <- 0.5
+for (i in 1:100) {
+  tt <- as.numeric(T[Js[i],])
+  tm <- mean(tt)
+  nm <- mean(as.numeric(N[Js[i],]))
+  nmax <- max(as.numeric(N[Js[i],]))
+  nmin <- min(as.numeric(N[Js[i],]))
+  if (tm > nm) {
+    Imax <- which(tt > nmax)
+    sen <- length(Imax)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Js[i]))
+    }
+  } else {
+    Imin <- which(tt < nmin)
+    sen <- length(Imin)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Js[i]))
+    }
+  }
+}
+thr <- 0.7
+for (i in 1:19) {
+  tt <- as.numeric(T[Jm[i],])
+  tm <- mean(tt)
+  nm <- mean(as.numeric(N[Jm[i],]))
+  nmax <- max(as.numeric(N[Jm[i],]))
+  nmin <- min(as.numeric(N[Jm[i],]))
+  if (tm > nm) {
+    Imax <- which(tt > nmax)
+    sen <- length(Imax)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jm[i]))
+    }
+  } else {
+    Imin <- which(tt < nmin)
+    sen <- length(Imin)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jm[i]))
+    }
+  }
+}
+thr <- 0.8
+for (i in 1:299) {
+  tt <- as.numeric(T[Jv[i],])
+  tm <- mean(tt)
+  nm <- mean(as.numeric(N[Jv[i],]))
+  nmax <- max(as.numeric(N[Jv[i],]))
+  nmin <- min(as.numeric(N[Jv[i],]))
+  if (tm > nm) {
+    Imax <- which(tt > nmax)
+    sen <- length(Imax)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jv[i]))
+    }
+  } else {
+    Imin <- which(tt < nmin)
+    sen <- length(Imin)/m
+    if (sen > thr) {
+      s <- c(s, as.numeric(Jv[i]))
+    }
+  }
+}
+s <- sort(unique(s))
+s
+```
+
+Then we find the same numbers in s and s0, which are the final gene IDs we want to get. The gene IDS are saved in "sfinal".
+```{r}
+sfinal <- s[s %in% s0]
+sfinal
+```
+
+Through these codes, we can preliminarily screen out genes with significant differences between tumor people and normal people, and we will further screen these genes.
+
+
+### MaxLogistic2.code
+
+This function is to create logistic regression
+
+The meaning of each parameter:
+  X predictors
+  ID response(normal is 0, and tumor is 1)
+  n sampel size
+  p the number of max groups
+  beta the coefficient matrix
+  I final predictor indexes
+  q coefficients dimensions
+```{r}
+MaxLogistic2 <- function(X, ID, n, p, beta, I, q) {
+  # Initialize XX matrix with negative infinities
+  XX <- matrix(-Inf, nrow = n, ncol = p)
+
+  # Index to manage column selection in X
+  ii <- 1
+
+  # Compute the linear combinations of beta and corresponding columns of X
+  for (i in 1:p) {
+    if (q[i] > 0) {
+      subset_X <- cbind(X[, 1], X[, I[ii:(ii + q[i] - 1)] + 1])
+      XX[, i] <- subset_X %*% beta[1:(q[i] + 1), i]
+      ii <- ii + q[i]
+    }
+  }
+
+  # Cap values at 10 to avoid numerical overflow
+  XX[XX > 10] <- 10
+
+  # Calculate the maximum value in each row
+  Xmax <- apply(XX, 1, max)
+
+  # Calculate probabilities using logistic function
+  Pmax <- exp(Xmax) / (1 + exp(Xmax))
+
+  # Create logical vectors for values <= 0.5 and > 0.5
+  Pmax_lte_0_5 <- Pmax <= 0.5
+  Pmax_gt_0_5 <- Pmax > 0.5
+
+  # Calculate the sum for the objective function
+  sg <- sum(Pmax_lte_0_5 * ID) + sum(Pmax_gt_0_5 * (1 - ID))
+
+  return(sg)
+}
+```
+sg means 
+
